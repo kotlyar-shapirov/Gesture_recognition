@@ -24,6 +24,10 @@ class LSTMTagger(nn.Module):
         self.batchnorm = nn.BatchNorm1d(N_input_features*N_1d_filters) # Input (N,C) or (N,C,L)
         print('No batchnorm')
 
+        # dropout
+        self.dropout = nn.Dropout(0.3)
+        print('dropout')
+
         # conv1d layer
         self.conv = nn.Conv1d(in_channels=N_input_features,
                               out_channels=N_input_features * N_1d_filters,
@@ -83,7 +87,7 @@ class LSTMTagger(nn.Module):
 
 
         # LINEAR FORWARD - forward
-        tag_space = self.hidden2tag(liner_input)
+        tag_space = self.hidden2tag(self.dropout(liner_input))
 
         # scoring
         # CROSS ENTROPY ALWAYS WITHOUT SOFTMAX !!!
