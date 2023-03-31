@@ -25,8 +25,9 @@ class LSTMTagger(nn.Module):
         print('No batchnorm')
 
         # dropout
-        self.dropout = nn.Dropout(0.3)
-        print('dropout')
+        self.dropout1= nn.Dropout(0.3)
+        self.dropout2= nn.Dropout(0.3)
+        print('dropout both')
 
         # conv1d layer
         self.conv = nn.Conv1d(in_channels=N_input_features,
@@ -57,6 +58,9 @@ class LSTMTagger(nn.Module):
         orig_gestrue_shapes = gesture_sequence.shape
         # print('Original gesture_sequence', gesture_sequence.shape)
 
+        # dropout
+        gesture_sequence = self.dropout1(gesture_sequence)
+
         # convolving
         # for convolution we need input shape - (N, C, L)
         gesture_sequence = self.conv(torch.transpose(gesture_sequence, 1, 2))
@@ -74,11 +78,11 @@ class LSTMTagger(nn.Module):
         # LINEAR FORWARD - reshape
         # using hidden states from all LSTM layers
         if self.use_all_lstm_layers:
-            liner_input = c_n.view(c_n.shape[1], c_n.shape[2] * c_n.shape[0])
+            linear_input = c_n.view(c_n.shape[1], c_n.shape[2] * c_n.shape[0])
 
         # using hidden states from only last LSTM layer
         else:
-            liner_input = c_n[-1].view(c_n.shape[1], c_n.shape[2])
+            linear_input = c_n[-1].view(c_n.shape[1], c_n.shape[2])
 
         # linear forward for point-wise
         # reshaping into batchsize, Number_of_words, hidden_embedding
@@ -87,7 +91,7 @@ class LSTMTagger(nn.Module):
 
 
         # LINEAR FORWARD - forward
-        tag_space = self.hidden2tag(self.dropout(liner_input))
+        tag_space = self.hidden2tag(self.dropout2(linear_input))
 
         # scoring
         # CROSS ENTROPY ALWAYS WITHOUT SOFTMAX !!!
