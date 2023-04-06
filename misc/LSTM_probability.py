@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class LSTMTaggerProb(nn.Module):
 
-    def __init__(self, N_input_features, hidden_dim, N_lstm_layers, dropout, # lstm
+    def __init__(self, N_input_features, hidden_dim, dropout, bi, # lstm
                  N_1d_filters, kernel_size, # 1d convolution
                  target_size, # last linear layer
                  ): 
@@ -15,9 +15,7 @@ class LSTMTaggerProb(nn.Module):
 
         self.hidden_dim = hidden_dim
         self.N_input_features = N_input_features
-
         self.N_1d_filters = N_1d_filters
-        self.N_lstm_layers = N_lstm_layers
 
         # dropout
         self.dropout1= nn.Dropout(0.3)
@@ -29,17 +27,26 @@ class LSTMTaggerProb(nn.Module):
                               out_channels=N_input_features * N_1d_filters,
                               kernel_size=kernel_size,
                               padding_mode='reflect',
-                              padding=kernel_size//2,
+                              padding=kernel_size//2,   # makes input and output size stay the same
                               groups=N_input_features)  # each channel has it's own filter
 
         # LSTM definition
         self.lstm = nn.LSTM(N_input_features * N_1d_filters,
                             hidden_dim * N_1d_filters,
                             num_layers=N_lstm_layers,
-                            dropout=dropout)
+                            dropout=dropout,
+                            bidirectional=bi)
 
         # Final linear layer
-        self.hidden2tag = nn.Linear(hidden_dim * N_1d_filters * N_lstm_layers, target_size)
+        if bi:
+            self.N_lstm_layers = 2
+        else:
+            self.N_lstm_layers = 1
+        lin_inpt_size = hidden_dim * N_1d_filters * self.N_lstm_layers
+        self.hidden2hidden = nn.Linear(lin_inpt_size, lin_inpt_size)
+        self.hidden2tag = nn.Linear(lin_inpt_size, target_size)
+        
+
 
 
     def forward(self, gesture_sequence):
@@ -56,7 +63,6 @@ class LSTMTaggerProb(nn.Module):
         # convolving
         # for convolution we need input shape - (N, C, L)
         gesture_sequence = self.conv(torch.transpose(gesture_sequence, 1, 2))
-        # gesture_sequence = self.batchnorm(gesture_sequence)
         # after convolution we go back to (N, L, C)
         gesture_sequence = torch.transpose(gesture_sequence, 1, 2)
 
@@ -71,6 +77,7 @@ class LSTMTaggerProb(nn.Module):
         linear_input = lstm_out.transpose(0,1)
 
         # LINEAR FORWARD - forward
+        linear_input = nn.ReLU()(self.hidden2hidden(linear_input))
         tag_space = self.hidden2tag(self.dropout2(linear_input))
 
         # scoring
