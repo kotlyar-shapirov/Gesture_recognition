@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class LSTMTaggerProb(nn.Module):
 
-    def __init__(self, N_input_features, hidden_dim, dropout, bi, # lstm
+    def __init__(self, N_input_features, hidden_dim, dropout, bi, num_layers, # lstm
                  N_1d_filters, kernel_size, # 1d convolution
                  target_size, # last linear layer
                  ): 
@@ -33,7 +33,7 @@ class LSTMTaggerProb(nn.Module):
         # LSTM definition
         self.lstm = nn.LSTM(N_input_features * N_1d_filters,
                             hidden_dim * N_1d_filters,
-                            num_layers=N_lstm_layers,
+                            num_layers=num_layers,
                             dropout=dropout,
                             bidirectional=bi)
 
@@ -77,8 +77,8 @@ class LSTMTaggerProb(nn.Module):
         linear_input = lstm_out.transpose(0,1)
 
         # LINEAR FORWARD - forward
-        linear_input = nn.ReLU()(self.hidden2hidden(linear_input))
-        tag_space = self.hidden2tag(self.dropout2(linear_input))
+        linear_input1 = nn.ReLU()(self.hidden2hidden(linear_input)) + linear_input
+        tag_space = self.hidden2tag(self.dropout2(linear_input1))
 
         # scoring
         # CROSS ENTROPY ALWAYS WITHOUT SOFTMAX !!!
