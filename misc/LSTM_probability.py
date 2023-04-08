@@ -77,8 +77,8 @@ class LSTMTaggerProb(nn.Module):
         linear_input = lstm_out.transpose(0,1)
 
         # LINEAR FORWARD - forward
-        linear_input1 = nn.ReLU()(self.hidden2hidden(linear_input)) + linear_input
-        tag_space = self.hidden2tag(self.dropout2(linear_input1))
+        # linear_input1 = nn.ReLU()(self.hidden2hidden(linear_input)) + linear_input
+        tag_space = self.hidden2tag(self.dropout2(linear_input))
 
         # scoring
         # CROSS ENTROPY ALWAYS WITHOUT SOFTMAX !!!
