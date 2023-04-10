@@ -30,9 +30,11 @@ class LSTMTaggerProb(nn.Module):
                               padding=kernel_size//2,   # makes input and output size stay the same
                               groups=N_input_features)  # each channel has it's own filter
 
+        self.conv2lstm = nn.Linear(N_input_features * N_1d_filters, hidden_dim)
+
         # LSTM definition
-        self.lstm = nn.LSTM(N_input_features * N_1d_filters,
-                            hidden_dim * N_1d_filters,
+        self.lstm = nn.LSTM(hidden_dim ,
+                            hidden_dim,
                             num_layers=num_layers,
                             dropout=dropout,
                             bidirectional=bi)
@@ -42,7 +44,7 @@ class LSTMTaggerProb(nn.Module):
             self.N_lstm_layers = 2
         else:
             self.N_lstm_layers = 1
-        lin_inpt_size = hidden_dim * N_1d_filters * self.N_lstm_layers
+        lin_inpt_size = hidden_dim * self.N_lstm_layers
         self.hidden2hidden = nn.Linear(lin_inpt_size, lin_inpt_size)
         self.hidden2tag = nn.Linear(lin_inpt_size, target_size)
         
@@ -65,6 +67,9 @@ class LSTMTaggerProb(nn.Module):
         gesture_sequence = self.conv(torch.transpose(gesture_sequence, 1, 2))
         # after convolution we go back to (N, L, C)
         gesture_sequence = torch.transpose(gesture_sequence, 1, 2)
+
+        # dimentionality reduction
+        gesture_sequence = self.conv2lstm(gesture_sequence)
 
         # LSTM FORWARD
         # transpose for LSTM to (L, N, С)
