@@ -45,10 +45,7 @@ class LSTMTaggerProb(nn.Module):
         else:
             self.N_lstm_layers = 1
         lin_inpt_size = hidden_dim * self.N_lstm_layers
-        self.hidden2hidden = nn.Linear(lin_inpt_size, lin_inpt_size)
         self.hidden2tag = nn.Linear(lin_inpt_size, target_size)
-        
-
 
 
     def forward(self, gesture_sequence):
@@ -82,7 +79,6 @@ class LSTMTaggerProb(nn.Module):
         linear_input = lstm_out.transpose(0,1)
 
         # LINEAR FORWARD - forward
-        # linear_input1 = nn.ReLU()(self.hidden2hidden(linear_input)) + linear_input
         tag_space = self.hidden2tag(self.dropout2(linear_input))
 
         # scoring
