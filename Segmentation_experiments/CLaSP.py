@@ -24,7 +24,17 @@ class CLaSP():
     
     def fit(self, vec_ts, n_segments=3):
         # create X_dist and X
-        self.create_X_and_distance_filtered(vec_ts)
+        X1, X_dist1, X_dist_filtered1 = self.create_X_and_distance_filtered(vec_ts, self.window)
+        X2, X_dist2, X_dist_filtered2 = self.create_X_and_distance_filtered(vec_ts, self.window*2)
+        X3, X_dist3, X_dist_filtered3 = self.create_X_and_distance_filtered(vec_ts, self.window*3)
+        X4, X_dist4, X_dist_filtered4 = self.create_X_and_distance_filtered(vec_ts, self.window*4)
+
+        # writing to class attributes
+        self.X = X1
+        if self.solver == 'knn':
+            self.X_dist = X_dist_filtered1 + X_dist_filtered2 + X_dist_filtered3 + X_dist_filtered4
+        elif self.solver == 'svd':
+            self.X_dist = X_dist1 + X_dist2 + X_dist3 + X_dist4
         
         # initialize stack
         first_elem = {'start':0,
@@ -50,7 +60,7 @@ class CLaSP():
                         continue
                     # selecting the slice and calculating clasp scores
                     X_dist_cur = self.X_dist[elem['start']:elem['stop']].T[elem['start']:elem['stop']]
-                    print('X_dist_cur', X_dist_cur.shape)
+                    # print('X_dist_cur', X_dist_cur.shape)
                     clasp_scores_cur = self.clasp_single_run(X_dist_cur)
                     dividing_idx = np.argmax(clasp_scores_cur[self.window:-self.window]) + self.window
                     dividing_val = clasp_scores_cur[dividing_idx]
@@ -68,7 +78,7 @@ class CLaSP():
                 if elem['clasp_max_val'] > max_val:
                     max_val = elem['clasp_max_val']
                     max_elem, max_idx = elem, i
-            print(max_idx)
+            # print(max_idx)
             # remove element from deque stack
             del self.stack[max_idx]
                 
@@ -85,37 +95,31 @@ class CLaSP():
             self.stack.append(right_elem)
                 
     # dataset creation
-    def create_X_and_distance_filtered(self, vec_ts):
+    def create_X_and_distance_filtered(self, vec_ts, window):
         # expand vec by window//2 to keep same dims
-        vec_left_expand = np.insert(vec_ts, obj=0, values=vec_ts[self.window//2:0:-1])
-        vec_both_expand = np.insert(vec_left_expand, obj=-1, values=vec_ts[-self.window//2:])
+        vec_left_expand = np.insert(vec_ts, obj=0, values=vec_ts[window//2:0:-1])
+        vec_both_expand = np.insert(vec_left_expand, obj=-1, values=vec_ts[-window//2:])
         # matrix creation
         X_list = []
         j = 0
-        while j < vec_both_expand.shape[0]-self.window:
-            X_list.append(vec_both_expand[j:j+self.window])
+        while j < vec_both_expand.shape[0]-window:
+            X_list.append(vec_both_expand[j:j+window])
             j += 1
         X = np.array(X_list)
-        print('X shape=', X.shape)
+        # print('X shape=', X.shape)
         # distance matrix
         X_dist = distance_matrix(X, X)
-        print('X_dist shape=', X_dist.shape)
+        # print('X_dist shape=', X_dist.shape)
 
         # filter on the diagonal so close points wont be so close
         col = np.zeros(X.shape[0])
         row = np.zeros(X.shape[0])
-        col[0:self.window//2] = np.max(X_dist)*2
-        row[0:self.window//2] = np.max(X_dist)*2
+        col[0:window//2] = np.max(X_dist)*2
+        row[0:window//2] = np.max(X_dist)*2
         filtr = toeplitz(col, row)
         X_dist_filtered = X_dist + filtr
-        # writing to class attributes
-        self.X = X
-        if self.solver == 'knn':
-            self.X_dist = X_dist_filtered
-        elif self.solver == 'svd':
-            self.X_dist = X_dist
-        else:
-            pass
+        return X, X_dist, X_dist_filtered
+
     
     # cross validation on single split of y
     def clasp_cross_val(self, X_dist, y, n_neighbors=3, n_splits=3, shuffle=False):
@@ -152,8 +156,8 @@ class CLaSP():
         X_dist_right_pca = pca_right.inverse_transform(pca_right.transform(X_dist_right))
 
         # no need to normalize since we summ the error of the both halves of matrix
-        score_left = np.linalg.norm(X_dist_left_pca - X_dist_left)/np.linalg.norm(X_dist_left)
-        score_right = np.linalg.norm(X_dist_right_pca - X_dist_right)/np.linalg.norm(X_dist_right)
+        score_left = np.linalg.norm(X_dist_left_pca - X_dist_left)#/np.linalg.norm(X_dist_left)
+        score_right = np.linalg.norm(X_dist_right_pca - X_dist_right)#/np.linalg.norm(X_dist_right)
         return score_left + score_right
     
     # cycling over all y-splits
