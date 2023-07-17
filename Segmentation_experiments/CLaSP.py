@@ -1,6 +1,7 @@
 import numpy as np
 from collections import deque
 from tqdm import tqdm
+from copy import deepcopy
 
 from scipy.linalg import toeplitz
 from scipy.spatial import distance_matrix
@@ -21,20 +22,28 @@ class CLaSP():
         self.cycles = cycles
         self.solver = solver
         self.stack = deque([])
+        self.final_split_stack = []
+
     
     def fit(self, vec_ts, n_segments=3):
+        assert vec_ts.shape[0]/(self.window+1) > n_segments, f'Cant fit {n_segments} of size {self.window} here'
         # create X_dist and X
         X1, X_dist1, X_dist_filtered1 = self.create_X_and_distance_filtered(vec_ts, self.window)
-        X2, X_dist2, X_dist_filtered2 = self.create_X_and_distance_filtered(vec_ts, self.window*2)
-        X3, X_dist3, X_dist_filtered3 = self.create_X_and_distance_filtered(vec_ts, self.window*3)
-        X4, X_dist4, X_dist_filtered4 = self.create_X_and_distance_filtered(vec_ts, self.window*4)
+        # X2, X_dist2, X_dist_filtered2 = self.create_X_and_distance_filtered(np.diff(vec_ts), self.window)
+
+        # X2, X_dist2, X_dist_filtered2 = self.create_X_and_distance_filtered(vec_ts, self.window+2)
+        # X3, X_dist3, X_dist_filtered3 = self.create_X_and_distance_filtered(vec_ts, self.window+4)
+        # X4, X_dist4, X_dist_filtered4 = self.create_X_and_distance_filtered(vec_ts, self.window+6)
 
         # writing to class attributes
         self.X = X1
         if self.solver == 'knn':
-            self.X_dist = X_dist_filtered1 + X_dist_filtered2 + X_dist_filtered3 + X_dist_filtered4
+            self.X_dist = X_dist_filtered1 #+ X_dist_filtered2
+            # self.X_dist += X_dist_filtered2/np.max(X_dist_filtered2)
+            # self.X_dist += X_dist_filtered3/np.max(X_dist_filtered3)
+            # self.X_dist += X_dist_filtered4/np.max(X_dist_filtered4)
         elif self.solver == 'svd':
-            self.X_dist = X_dist1 + X_dist2 + X_dist3 + X_dist4
+            self.X_dist = X_dist1 #+ X_dist2 + X_dist3 + X_dist4
         
         # initialize stack
         first_elem = {'start':0,
@@ -52,8 +61,8 @@ class CLaSP():
                 if elem['clasp_max_idx'] is not None:
                     self.stack.append(elem) # put it back
                 if elem['clasp_max_idx'] is None:
-                    # skip short segents
-                    if elem['stop'] - elem['start'] < self.window*3+1:
+                    # skip short segments
+                    if elem['stop'] - elem['start'] < self.window*2+1:#self.window*3+1:
                         elem['clasp_max_idx'] = -1
                         elem['clasp_max_val'] = 0
                         self.stack.append(elem)
@@ -63,12 +72,13 @@ class CLaSP():
                     # print('X_dist_cur', X_dist_cur.shape)
                     clasp_scores_cur = self.clasp_single_run(X_dist_cur)
                     dividing_idx = np.argmax(clasp_scores_cur[self.window:-self.window]) + self.window
+                    # dividing_idx = np.argmax(clasp_scores_cur[3:-3]) + 3
                     dividing_val = clasp_scores_cur[dividing_idx]
                     elem['clasp_max_idx'] = dividing_idx
                     elem['clasp_max_val'] = dividing_val
-#                     elem['clasp_scores'] = clasp_scores_cur
+                    elem['clasp_scores'] = clasp_scores_cur
                     self.stack.append(elem) # put it back
-                
+            # print(len(self.stack))
             # comparison of computed CLASP vectors before splitting
             max_val = 0
             max_elem = None
@@ -80,8 +90,14 @@ class CLaSP():
                     max_elem, max_idx = elem, i
             # print(max_idx)
             # remove element from deque stack
-            del self.stack[max_idx]
-                
+            if max_idx is not None:
+                self.final_split_stack.append(deepcopy(self.stack[max_idx]))
+                del self.stack[max_idx]
+            else:
+                # there is not enough long sequences
+                print('cant fit so much segments I am sowwy 😅')
+                break
+            
             # creating and adding best element split to stack
             left_elem = {'start':max_elem['start'],
                          'stop':max_elem['start']+max_elem['clasp_max_idx'],
@@ -162,14 +178,14 @@ class CLaSP():
     
     # cycling over all y-splits
     def clasp_single_run(self, X_dist):
-        clasp = []
-        for i in tqdm(range(3, X_dist.shape[0]-3)):
+        clasp = [0]*self.window
+        for i in tqdm(range(self.window, X_dist.shape[0]-self.window)):
             y = np.ones(X_dist.shape[0])
             y[0:i] = 0
             if self.solver == 'knn':
                 scores = self.clasp_cross_val(X_dist, y, n_neighbors=3, n_splits=3, shuffle=True)
             elif self.solver == 'svd':
                 scores = self.clasp_svd(X_dist, i)
-            
             clasp.append(np.mean(scores))
+        clasp = clasp + [0]*self.window
         return clasp
